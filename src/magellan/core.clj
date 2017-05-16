@@ -130,7 +130,7 @@
           (.setValue (doto (GeoTiffWriteParams.)
                        (.setCompressionMode GeoTiffWriteParams/MODE_EXPLICIT)
                        (.setCompressionType "LZW")
-                       (.setCompressionQuality 1.0)
+                       (.setCompressionQuality 0.5)
                        (.setTilingMode GeoTiffWriteParams/MODE_EXPLICIT)
                        (.setTiling 256 16))))
     ;; Write the GeoTIFF to disk
