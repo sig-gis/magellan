@@ -2,9 +2,7 @@
   (:require [schema.core :as s]
             [clojure.java.io :as io])
   (:import (java.net URL)
-           (java.awt.image RenderedImage)
-           (org.geotools.coverage.grid GridCoordinates2D
-                                       GridCoverageFactory
+           (org.geotools.coverage.grid GridCoverageFactory
                                        GridGeometry2D
                                        RenderedSampleDimension
                                        GridCoverage2D)
@@ -20,11 +18,12 @@
            (org.geotools.coverage.processing Operations)
            (org.geotools.gce.geotiff GeoTiffWriter GeoTiffWriteParams)
            (org.opengis.referencing.crs CoordinateReferenceSystem)
+           javax.media.jai.RenderedOp
            (org.opengis.parameter GeneralParameterValue)))
 
-(s/defrecord Raster
+(s/defrecord RasterInfo
     [coverage   :- GridCoverage2D
-     image      :- RenderedImage
+     image      :- RenderedOp
      crs        :- CoordinateReferenceSystem
      projection :- (s/maybe MapProjection)
      envelope   :- GeneralEnvelope
@@ -34,13 +33,13 @@
      bands      :- [RenderedSampleDimension]])
 
 ;; TODO Add :envelope-2d (.getEnvelope2D coverage)
-;; TODO Add a function that converts a simple Clojure map of literals into a Raster record
-(s/defn to-raster :- Raster
+;; TODO Add a function that converts a simple Clojure map of literals into a RasterInfo record
+(s/defn to-raster :- RasterInfo
   [coverage :- GridCoverage2D]
   (let [image (.getRenderedImage coverage)
         crs   (.getCoordinateReferenceSystem coverage)
         grid  (.getGridGeometry coverage)]
-    (map->Raster
+    (map->RasterInfo
      {:coverage   coverage
       :image      image
       :crs        crs
@@ -51,7 +50,7 @@
       :height     (.getHeight image)
       :bands      (vec (.getSampleDimensions coverage))})))
 
-(s/defn read-raster :- Raster
+(s/defn read-raster :- RasterInfo
   [filename :- s/Str]
   (let [file (io/file filename)]
     (if (.exists file)
@@ -113,18 +112,18 @@
                         envelope))))
 
 ;; FIXME: Throws a NoninvertibleTransformException when reprojecting to EPSG:4326.
-(s/defn reproject-raster :- Raster
-  [raster :- Raster
+(s/defn reproject-raster :- RasterInfo
+  [raster :- RasterInfo
    crs    :- CoordinateReferenceSystem]
   (to-raster (.resample Operations/DEFAULT (:coverage raster) crs)))
 
-(s/defn resample-raster :- Raster
-  [raster :- Raster
+(s/defn resample-raster :- RasterInfo
+  [raster :- RasterInfo
    grid   :- GridGeometry2D]
   (to-raster (.resample Operations/DEFAULT (:coverage raster) nil grid nil)))
 
-(s/defn crop-raster :- Raster
-  [raster   :- Raster
+(s/defn crop-raster :- RasterInfo
+  [raster   :- RasterInfo
    envelope :- GeneralEnvelope]
   (to-raster (.crop Operations/DEFAULT ^GridCoverage2D (:coverage raster) envelope)))
 
@@ -132,7 +131,7 @@
 ;; FIXME: Parameterize the compression and tiling operations.
 ;; REFERENCE: http://svn.osgeo.org/geotools/trunk/modules/plugin/geotiff/src/test/java/org/geotools/gce/geotiff/GeoTiffWriterTest.java
 (s/defn write-raster :- s/Any
-  [raster   :- Raster
+  [raster   :- RasterInfo
    filename :- s/Str]
   (let [writer (GeoTiffWriter. (io/file filename))
         params (-> writer
@@ -154,7 +153,7 @@
            (println "Cannot write raster. Exception:" (class e))))))
 
 (s/defn raster-band-stats :- {:min s/Num :max s/Num :nodata (s/maybe s/Num)}
-  [raster   :- Raster
+  [raster   :- RasterInfo
    band-num :- s/Int]
   (let [^GridSampleDimension band (nth (:bands raster) band-num)]
     {:min    (.getMinimumValue band)

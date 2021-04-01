@@ -1,15 +1,17 @@
 (ns magellan.raster.inspect
   (:require [magellan.core :refer [crs-to-srid]])
-  (:import (java.awt.image DataBuffer RenderedImage)
+  (:import (java.awt.image DataBuffer DataBuffer Raster)
            org.geotools.coverage.GridSampleDimension
            org.geotools.coverage.grid.GridCoverage2D
-           magellan.core.Raster))
+           org.geotools.geometry.GeneralEnvelope
+           javax.media.jai.RenderedOp
+           magellan.core.RasterInfo))
 
 ;;=====================================================================
-;; Raster inspection functions (ALPHA)
+;; RasterInfo inspection functions (ALPHA)
 ;;=====================================================================
 
-(defn describe-image [^RenderedImage image]
+(defn describe-image [^RenderedOp image]
   {:height (.getHeight image)
    :width  (.getWidth image)
    :bands  (.getNumBands (.getSampleModel image))
@@ -26,7 +28,7 @@
             :offset {:x (.getTileGridXOffset image)
                      :y (.getTileGridYOffset image)}}})
 
-(defn describe-envelope [envelope]
+(defn describe-envelope [^GeneralEnvelope envelope]
   (let [dimensions [:x :y :z]]
     (reduce (fn [acc ordinate]
               (assoc acc
@@ -58,7 +60,7 @@
    ;;                      (.getCategories band))
    })
 
-(defn describe-raster [^Raster raster]
+(defn describe-raster [^RasterInfo raster]
   (let [image    (describe-image (:image raster))
         envelope (describe-envelope (:envelope raster))
         bands    (mapv describe-band (:bands raster))
@@ -71,19 +73,23 @@
 ;; NOTE: .getSamples isn't supported for byte-array or short-array, so
 ;; we substitute int-array instead. If the type cannot be determined,
 ;; we fall back to using a double array.
-(defn- get-typed-array [data-buffer-type]
-  (condp = data-buffer-type
-    DataBuffer/TYPE_BYTE      int-array
-    DataBuffer/TYPE_USHORT    int-array
-    DataBuffer/TYPE_SHORT     int-array
-    DataBuffer/TYPE_INT       int-array
-    DataBuffer/TYPE_FLOAT     float-array
-    DataBuffer/TYPE_DOUBLE    double-array
-    DataBuffer/TYPE_UNDEFINED double-array
-    double-array))
+(defn- get-typed-array-fn [^Raster data ^Integer x ^Integer w]
+  (let [data-type (.getDataType (.getDataBuffer data))
+        int-fn    (fn [^Integer b ^Integer y] (.getSamples data x y w (int 1) b (int-array w)))
+        float-fn  (fn [^Integer b ^Integer y] (.getSamples data x y w (int 1) b (float-array w)))
+        double-fn (fn [^Integer b ^Integer y] (.getSamples data x y w (int 1) b (double-array w)))]
+    (condp = data-type
+      DataBuffer/TYPE_BYTE      int-fn
+      DataBuffer/TYPE_USHORT    int-fn
+      DataBuffer/TYPE_SHORT     int-fn
+      DataBuffer/TYPE_INT       int-fn
+      DataBuffer/TYPE_FLOAT     float-fn
+      DataBuffer/TYPE_DOUBLE    double-fn
+      DataBuffer/TYPE_UNDEFINED double-fn
+      double-fn)))
 
-(defn extract-matrix [^Raster raster]
-  (let [image            (:image raster)
+(defn extract-matrix [^RasterInfo raster]
+  (let [image            ^RenderedOp (:image raster)
         {:keys [height
                 width
                 bands
@@ -91,10 +97,10 @@
         {min-x :x
          min-y :y}       origin
         data             (.getData image)
-        typed-array      (get-typed-array (.getDataType (.getDataBuffer data)))]
+        row->typed-array (get-typed-array-fn data min-x width)]
     (into-array (for [b (range bands)]
                   (into-array (for [y (range min-y (+ min-y height))]
-                                (.getSamples data min-x y width 1 b (typed-array width))))))))
+                                (row->typed-array b y)))))))
 
 (defn show-raster [raster]
   (let [^GridCoverage2D coverage (:coverage raster)]

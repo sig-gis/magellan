@@ -22,4 +22,8 @@
                                       {:git/url "https://github.com/cognitect-labs/test-runner.git"
                                        :sha     "b6b3193fcc42659d7e46ecd1884a228993441182"}}
                         :main-opts   ["-e" "(do,(set!,*warn-on-reflection*,true),nil)"
-                                      "-m" "cognitect.test-runner"]}}}
+                                      "-m" "cognitect.test-runner"]}
+           :check-reflections {:main-opts
+                               ["-e" "(do,(set!,*warn-on-reflection*,true),nil)"
+                                "-e" "(require,'magellan.core)"
+                                "-e" "(require,'magellan.raster.inspect)"]}}}
