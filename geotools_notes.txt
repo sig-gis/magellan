@@ -1,0 +1,24 @@
+Use interfaces in these modules for easy upgrading between GeoTools versions:
+- gt-opengis
+- gt-main
+- jts
+
+Install JAI and ImageIO in my JRE
+
+Use FactoryFinders to find Factory classes for creating instances of:
+  Features, Styles, Filters, CoordinateReferencingSystems, and DataStores
+
+For example, you should write code like this:
+
+DataStore dataStore = DataStoreFinder.getDataStore( file );
+
+Not like this:
+
+ShapefileDataStoreFactory factory = new ShapefileDataStoreFactory();
+ShapeFileDataStore = factory.createDataStore( file );
+
+
+Alternatives to GeoTools:
+
+- clj-gdal https://github.com/Element84/clj-gdal
+- GDAL Java API https://gdal.org/java/overview-summary.html https://gdal.org/tutorials/raster_api_tut.html
