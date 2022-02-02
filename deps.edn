@@ -1,14 +1,14 @@
 {:paths ["src"]
 
  :deps {org.clojure/clojure       {:mvn/version "1.10.3"}
-        org.geotools/gt-shapefile {:mvn/version "24.1"}
-        org.geotools/gt-swing     {:mvn/version "24.1"}
-        org.geotools/gt-epsg-hsql {:mvn/version "24.1"}
-        org.geotools/gt-geotiff   {:mvn/version "24.1"}
-        org.geotools/gt-image     {:mvn/version "24.1"}
-        org.geotools/gt-wms       {:mvn/version "24.1"}
-        org.geotools/gt-coverage  {:mvn/version "24.1"}
-        prismatic/schema          {:mvn/version "1.1.12"}}
+        org.geotools/gt-shapefile {:mvn/version "26.2"}
+        org.geotools/gt-swing     {:mvn/version "26.2"}
+        org.geotools/gt-epsg-hsql {:mvn/version "26.2"}
+        org.geotools/gt-geotiff   {:mvn/version "26.2"}
+        org.geotools/gt-image     {:mvn/version "26.2"}
+        org.geotools/gt-wms       {:mvn/version "26.2"}
+        org.geotools/gt-coverage  {:mvn/version "26.2"}
+        prismatic/schema          {:mvn/version "1.2.0"}}
 
  :mvn/repos {"osgeo" {:url "https://repo.osgeo.org/repository/release/"}}
 
