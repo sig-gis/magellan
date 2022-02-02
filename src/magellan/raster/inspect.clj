@@ -98,9 +98,12 @@
          min-y :y}       origin
         data             (.getData image)
         row->typed-array (get-typed-array-fn data min-x width)]
-    (into-array (for [b (range bands)]
-                  (into-array (for [y (range min-y (+ min-y height))]
-                                (row->typed-array b y)))))))
+    (if (> bands 1)
+      (into-array (for [b (range bands)]
+                    (into-array (for [y (range min-y (+ min-y height))]
+                                  (row->typed-array b y)))))
+      (into-array (for [y (range min-y (+ min-y height))]
+                    (row->typed-array 0 y))))))
 
 (defn show-raster [raster]
   (let [^GridCoverage2D coverage (:coverage raster)]
