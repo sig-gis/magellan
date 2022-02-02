@@ -14,6 +14,16 @@ clojure -M:check-deps
 
 Remember to update deps.edn with any new versions that are found.
 
+*** check-reflections
+
+To check for reflection warnings, run:
+
+#+begin_src sh
+clojure -M:check-reflections
+#+end_src
+
+Remember to add type hints as necessary to remove these once found.
+
 *** deploy-jar
 
 To build a JAR from this library and deploy it to clojars.org, run:
