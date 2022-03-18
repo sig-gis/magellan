@@ -1,6 +1,7 @@
 {:paths ["src"]
 
- :deps {org.clojure/clojure       {:mvn/version "1.10.3"}
+ :deps {cnuernber/dtype-next      {:mvn/version "9.012"}
+        org.clojure/clojure       {:mvn/version "1.10.3"}
         org.geotools/gt-shapefile {:mvn/version "26.2"}
         org.geotools/gt-swing     {:mvn/version "26.2"}
         org.geotools/gt-epsg-hsql {:mvn/version "26.2"}
@@ -14,7 +15,7 @@
 
  :aliases {:check-deps        {:extra-deps {olical/depot {:mvn/version "2.1.0"}}
                                :main-opts  ["-m" "depot.outdated.main"]}
-           :check-reflections {:main-opts  ["-e" "(do,(set!,*warn-on-reflection*,true),nil)"
+           :check-reflections {:main-opts ["-e" "(do,(set!,*warn-on-reflection*,true),nil)"
                                             "-e" "(require,'magellan.core)"
                                             "-e" "(require,'magellan.raster.inspect)"]}
            :deploy-jar        {:extra-deps {seancorfield/depstar    {:mvn/version "2.0.165"}
