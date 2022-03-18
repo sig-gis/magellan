@@ -75,8 +75,6 @@
      :bands    bands
      :srid     srid}))
 
-(def datatypes #{:int32 :float32 :float64})
-
 ;; NOTE: .getSamples isn't supported for byte-array or short-array, so
 ;; we substitute int-array instead. If the type cannot be determined,
 ;; we fall back to using a double array.
@@ -128,6 +126,8 @@
                                   (row->typed-array b y)))))
       (into-array (for [y (range min-y (+ min-y height))]
                     (row->typed-array 0 y))))))
+
+(def datatypes #{:int32 :float32 :float64})
 
 (defn extract-tensor [^RasterInfo raster & options]
   (let [{:keys [convert-fn datatype]}       options
