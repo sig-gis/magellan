@@ -1,6 +1,8 @@
 (ns magellan.core
   (:require [schema.core :as s]
-            [clojure.java.io :as io])
+            [clojure.java.io :as io]
+            [tech.v3.datatype :as d]
+            [tech.v3.tensor :as t])
   (:import (java.net URL)
            (org.geotools.coverage.grid GridCoverageFactory
                                        GridGeometry2D
@@ -101,15 +103,53 @@
    height     :- Double]
   (Envelope2D. (srid-to-crs srid) upperleftx upperlefty width height))
 
+(defn- matrix-to-float-array-2d
+  "Converts the supplied matrix data to a primitive Java float[][] (array of arrays)."
+  ^"[[F" [matrix]
+  ;; NOTE why use (cond ...), rather than polymorphic dispatch, (Val, 26 Jul 2022)
+  ;; such as an IToFloat2DArray protocol? Several reasons:
+  ;; 1. Expediency
+  ;; 2. Maintenance: before committing to expose
+  ;; an open-to-extension protocol for Magellan users to implement,
+  ;; let's conservatively wait until they ask for it,
+  ;; rather than adding to the maintenance burden. YAGNI.
+  ;; 3. Robustness to deps upgrades:
+  ;; libraries like tech.v3.datatype are not always
+  ;; super stable wrt the Java types they expose. Predicates such as
+  ;; t/tensor? are probably more reliable.
+  (cond
+    (t/tensor? matrix)
+    (->> (t/rows matrix)
+         (mapv d/->float-array)
+         (into-array))
+
+    :else
+    ;; WARNING: this code path is much less efficient than the above,
+    ;; due to the overhead of primitive number boxing and lazy seqs.
+    ;; Experiments showed a >4x increase in execution time.
+    (into-array (map float-array matrix))))
+
+(s/defn float-2d-array-to-raster :- GridCoverage2D
+  "Like matrix-to-raster, but lets callers supply the data
+  directly as a Java float[][], in case matrix-to-raster
+  does not know how to do that."
+  [name         :- s/Str
+   float-matrix :- (Class/forName "[[F")
+   envelope     :- Envelope2D]
+  (to-raster (.create (GridCoverageFactory.)
+               ^String name
+               ;; Yes, this type hint seems redundant,
+               ;; but it's required against reflection warnings.
+               ^"[[F" float-matrix
+               envelope)))
+
 (s/defn matrix-to-raster :- GridCoverage2D
   [name     :- s/Str
    matrix   :- [[double]]
    envelope :- Envelope2D]
-  (let [float-matrix (into-array (map float-array matrix))]
-    (to-raster (.create (GridCoverageFactory.)
-                        ^String name
-                        ^"[[F" float-matrix
-                        envelope))))
+  (-> matrix
+      (matrix-to-float-array-2d)
+      (as-> float-matrix (float-2d-array-to-raster name float-matrix envelope))))
 
 ;; FIXME: Throws a NoninvertibleTransformException when reprojecting to EPSG:4326.
 (s/defn reproject-raster :- RasterInfo
