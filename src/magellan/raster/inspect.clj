@@ -1,7 +1,8 @@
 (ns magellan.raster.inspect
-  (:require [magellan.core :refer [crs-to-srid]]
-            [tech.v3.datatype :as d]
-            [tech.v3.tensor :as t])
+  (:require [magellan.core                :refer [crs-to-srid]]
+            [magellan.raster.impl.interop :as raster-interop]
+            [tech.v3.datatype             :as d]
+            [tech.v3.tensor               :as t])
   (:import (java.awt.image DataBuffer DataBuffer Raster)
            org.geotools.coverage.GridSampleDimension
            org.geotools.coverage.grid.GridCoverage2D
@@ -75,40 +76,72 @@
      :bands    bands
      :srid     srid}))
 
+(def datatypes #{:int32 :float32 :float64})
+
 ;; NOTE: .getSamples isn't supported for byte-array or short-array, so
 ;; we substitute int-array instead. If the type cannot be determined,
 ;; we fall back to using a double array.
-(defn- get-typed-array-fn
-  ([^Raster data ^Integer x ^Integer w]
-   (let [data-type (.getDataType (.getDataBuffer data))
-         int-fn    (fn [^Integer b ^Integer y] (.getSamples data x y w (int 1) b (int-array w)))
-         float-fn  (fn [^Integer b ^Integer y] (.getSamples data x y w (int 1) b (float-array w)))
-         double-fn (fn [^Integer b ^Integer y] (.getSamples data x y w (int 1) b (double-array w)))]
-     (condp = data-type
-       DataBuffer/TYPE_BYTE      int-fn
-       DataBuffer/TYPE_USHORT    int-fn
-       DataBuffer/TYPE_SHORT     int-fn
-       DataBuffer/TYPE_INT       int-fn
-       DataBuffer/TYPE_FLOAT     float-fn
-       DataBuffer/TYPE_DOUBLE    double-fn
-       DataBuffer/TYPE_UNDEFINED double-fn)))
+(def ^:private raster-datatype->default-tensor-dtype
+  {DataBuffer/TYPE_BYTE      :int32
+   DataBuffer/TYPE_USHORT    :int32
+   DataBuffer/TYPE_SHORT     :int32
+   DataBuffer/TYPE_INT       :int32
+   DataBuffer/TYPE_FLOAT     :float32
+   DataBuffer/TYPE_DOUBLE    :float64
+   DataBuffer/TYPE_UNDEFINED :float64})
 
-  ([^Raster data ^Integer x ^Integer y ^Integer w ^Integer h datatype]
-   (let [total-area (* w h)
-         int-fn     (fn [^Integer b] (.getSamples data x y w h b (int-array total-area)))
-         float-fn   (fn [^Integer b] (.getSamples data x y w h b (float-array total-area)))
-         double-fn  (fn [^Integer b] (.getSamples data x y w h b (double-array total-area)))]
-     (condp = (or datatype (.getDataType (.getDataBuffer data)))
-       :int32                    int-fn
-       :float32                  float-fn
-       :float64                  double-fn
-       DataBuffer/TYPE_BYTE      int-fn
-       DataBuffer/TYPE_USHORT    int-fn
-       DataBuffer/TYPE_SHORT     int-fn
-       DataBuffer/TYPE_INT       int-fn
-       DataBuffer/TYPE_FLOAT     float-fn
-       DataBuffer/TYPE_DOUBLE    double-fn
-       DataBuffer/TYPE_UNDEFINED double-fn))))
+(defn- raster-datatype?
+  [raster-datatype]
+  (contains? raster-datatype->default-tensor-dtype raster-datatype))
+
+(defn- default-target-dtype
+  [raster-datatype]
+  {:pre [(raster-datatype? raster-datatype)]}
+  (get raster-datatype->default-tensor-dtype raster-datatype))
+
+(defn- resolve-target-dtype
+  "Chooses the datatype for the target dtype-next tensor, given:
+  - `requested-dtype`: a requested dtype-next tensor datatype, either nil or a keyword in `#'datatypes`,
+  - `raster-datatype`: an integer, the datatype of the Raster from which to read.
+
+  Returns a dtype-next datatype keyword."
+  [requested-dtype raster-datatype]
+  {:pre  [(or (nil? requested-dtype) (contains? datatypes requested-dtype))
+          (raster-datatype? raster-datatype)]
+   :post [(contains? datatypes %)]}
+  (or requested-dtype
+      (default-target-dtype raster-datatype)))
+
+(defn- resolve-target-dtype-for-raster
+  [requested-dtype ^Raster raster]
+  (resolve-target-dtype requested-dtype
+                        (.getDataType (.getDataBuffer raster))))
+
+(defn- get-typed-array-fn
+  ([^Raster data x w]
+   (let [x         (int x)
+         w         (int w)
+         int-fn    (fn [b y] (.getSamples data x (int y) w (int 1) (int b) (int-array w)))
+         float-fn  (fn [b y] (.getSamples data x (int y) w (int 1) (int b) (float-array w)))
+         double-fn (fn [b y] (.getSamples data x (int y) w (int 1) (int b) (double-array w)))]
+     (case (resolve-target-dtype-for-raster nil data)
+       :int32   int-fn
+       :float32 float-fn
+       :float64 double-fn)))
+
+  ([^Raster data x y w h datatype]
+   (let [x          (int x)
+         y          (int y)
+         w          (int w)
+         h          (int h)
+         total-area (* (int w) (int h))
+         int-fn     (fn [b] (.getSamples data x y w h (int b) (int-array total-area)))
+         float-fn   (fn [b] (.getSamples data x y w h (int b) (float-array total-area)))
+         double-fn  (fn [b] (.getSamples data x y w h (int b) (double-array total-area)))]
+     (case (resolve-target-dtype-for-raster datatype data)
+       :int32   int-fn
+       :float32 float-fn
+       :float64 double-fn))))
 
 (defn extract-matrix [^RasterInfo raster]
   (let [image            ^RenderedOp (:image raster)
@@ -120,14 +153,13 @@
          min-y :y}       origin
         data             (.getData image)
         row->typed-array (get-typed-array-fn data min-x width)]
+    ;; IMPROVEMENT use raster-interop/get-samples for this function too, and remove get-typed-array-fn. (Val, 29 Nov 2022)
     (if (> bands 1)
       (into-array (for [b (range bands)]
                     (into-array (for [y (range min-y (+ min-y height))]
                                   (row->typed-array b y)))))
       (into-array (for [y (range min-y (+ min-y height))]
                     (row->typed-array 0 y))))))
-
-(def datatypes #{:int32 :float32 :float64})
 
 (defn extract-tensor [^RasterInfo raster & options]
   (let [{:keys [convert-fn datatype]}       options
@@ -136,15 +168,19 @@
         {:keys [height width bands origin]} (describe-image image)
         {min-x :x min-y :y}                 origin
         data                                (.getData image)
-        row->typed-array                    (get-typed-array-fn data min-x min-y width height datatype)
-        tensor                              (if (= bands 1)
-                                              (-> (row->typed-array 0)
-                                                  (t/ensure-tensor)
-                                                  (t/reshape [height width]))
-                                              (as-> (mapv (fn [b] (d/->buffer (row->typed-array b))) (range bands)) $
-                                                (d/concat-buffers $)
-                                                (t/ensure-tensor $)
-                                                (t/reshape $ [bands height width])))]
+        target-dtype                        (resolve-target-dtype-for-raster datatype data)
+        chunk-length                        (* (long width) (long height))
+        tensor-arr-length                   (* (long bands) chunk-length)
+        ;; NOTE for performance, we eagerly initialize a flat array, fill it using fast JVM interop, and use it to back the returned tensor. (Val, 28 Nov 2022)
+        tensor-arr                          (raster-interop/tensor-backing-array target-dtype tensor-arr-length)
+        _copied                             (->> (range bands)
+                                                 (run! (fn copy-band! [band-index]
+                                                         (let [chunk-array (raster-interop/get-samples target-dtype data min-x min-y width height band-index)]
+                                                           (System/arraycopy chunk-array (int 0) tensor-arr (* (int chunk-length) (int band-index)) chunk-length)))))
+        tensor                              (-> (t/ensure-tensor tensor-arr)
+                                                (t/reshape (if (= bands 1)
+                                                             [height width]
+                                                             [bands height width])))]
     (if convert-fn
       (d/copy! (d/emap convert-fn datatype tensor) tensor)
       tensor)))
