@@ -1,6 +1,5 @@
 (ns magellan.raster.inspect
   (:require [magellan.core                :refer [crs-to-srid]]
-            [magellan.raster.impl.interop :as raster-interop]
             [tech.v3.datatype             :as d]
             [tech.v3.tensor               :as t])
   (:import (java.awt.image DataBuffer DataBuffer Raster)
@@ -117,6 +116,27 @@
   (resolve-target-dtype requested-dtype
                         (.getDataType (.getDataBuffer raster))))
 
+(defn- tensor-backing-array
+  [target-dtype arr-length]
+  (let [arr-length (int arr-length)]
+    (case target-dtype
+      :int32   (int-array arr-length)
+      :float32 (float-array arr-length)
+      :float64 (double-array arr-length))))
+
+(defn- get-samples
+  [target-dtype ^Raster raster x y w h b]
+  (let [w            (int w)
+        h            (int h)
+        chunk-length (* w h)
+        x            (int x)
+        y            (int y)
+        b            (int b)]
+    (case target-dtype
+      :int-32  (.getSamples raster x y w h b (int-array chunk-length))
+      :float32 (.getSamples raster x y w h b (float-array chunk-length))
+      :float64 (.getSamples raster x y w h b (double-array chunk-length)))))
+
 (defn- get-typed-array-fn
   ([^Raster data x w]
    (let [x         (int x)
@@ -172,10 +192,10 @@
         chunk-length                        (* (long width) (long height))
         tensor-arr-length                   (* (long bands) chunk-length)
         ;; NOTE for performance, we eagerly initialize a flat array, fill it using fast JVM interop, and use it to back the returned tensor. (Val, 28 Nov 2022)
-        tensor-arr                          (raster-interop/tensor-backing-array target-dtype tensor-arr-length)
+        tensor-arr                          (tensor-backing-array target-dtype tensor-arr-length)
         _copied                             (->> (range bands)
                                                  (run! (fn copy-band! [band-index]
-                                                         (let [chunk-array (raster-interop/get-samples target-dtype data min-x min-y width height band-index)]
+                                                         (let [chunk-array (get-samples target-dtype data min-x min-y width height band-index)]
                                                            (System/arraycopy chunk-array (int 0) tensor-arr (* (int chunk-length) (int band-index)) chunk-length)))))
         tensor                              (-> (t/ensure-tensor tensor-arr)
                                                 (t/reshape (if (= bands 1)
