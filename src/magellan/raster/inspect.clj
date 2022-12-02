@@ -134,7 +134,7 @@
          y          (int y)
          w          (int w)
          h          (int h)
-         total-area (* (int w) (int h))
+         total-area (* w h)
          int-fn     (fn [b] (.getSamples data x y w h (int b) (int-array total-area)))
          float-fn   (fn [b] (.getSamples data x y w h (int b) (float-array total-area)))
          double-fn  (fn [b] (.getSamples data x y w h (int b) (double-array total-area)))]
