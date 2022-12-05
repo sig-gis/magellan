@@ -133,7 +133,7 @@
         y            (int y)
         b            (int b)]
     (case target-dtype
-      :int-32  (.getSamples raster x y w h b (int-array chunk-length))
+      :int32   (.getSamples raster x y w h b (int-array chunk-length))
       :float32 (.getSamples raster x y w h b (float-array chunk-length))
       :float64 (.getSamples raster x y w h b (double-array chunk-length)))))
 
