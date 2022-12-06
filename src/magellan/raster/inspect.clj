@@ -1,7 +1,7 @@
 (ns magellan.raster.inspect
-  (:require [magellan.core                :refer [crs-to-srid]]
-            [tech.v3.datatype             :as d]
-            [tech.v3.tensor               :as t])
+  (:require [magellan.core    :refer [crs-to-srid]]
+            [tech.v3.datatype :as d]
+            [tech.v3.tensor   :as t])
   (:import (java.awt.image DataBuffer DataBuffer Raster)
            org.geotools.coverage.GridSampleDimension
            org.geotools.coverage.grid.GridCoverage2D
