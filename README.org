@@ -14,12 +14,12 @@ clojure -M:check-deps
 
 Remember to update deps.edn with any new versions that are found.
 
-*** check-reflections
+*** check-reflection
 
 To check for reflection warnings, run:
 
 #+begin_src sh
-clojure -M:check-reflections
+clojure -M:check-reflection
 #+end_src
 
 Remember to add type hints as necessary to remove these once found.
@@ -46,7 +46,7 @@ clojure -M:test
 
 ** License
 
-Copyright © 2011-2022 Spatial Informatics Group, LLC.
+Copyright © 2011-2023 Spatial Informatics Group, LLC.
 
 Magellan is distributed by Spatial Informatics Group, LLC. under the
 terms of the Eclipse Public License version 2.0 (EPLv2). See
